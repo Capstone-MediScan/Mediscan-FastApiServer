@@ -1,0 +1,12 @@
+fastapi
+uvicorn
+opencv-python
+packaging
+pandas
+pkbar
+rembg
+setuptools
+torch
+torchbearer
+torchvision
+numpy

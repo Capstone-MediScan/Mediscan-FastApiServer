@@ -177,3 +177,4 @@ pyrightconfig.json
 
 .idea/
 /data/3rd_model/
+*.pt
