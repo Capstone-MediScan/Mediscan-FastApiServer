@@ -1,10 +1,12 @@
 import cv2
 import numpy as np
 
-from . import PillModel
-from . import ImageSide_circle
-from . import ImageSide_ellipse
-from . import ImageContourCount
+from . import PillModel as PillModel
+from . import ImageSide_circle as ImageSide_circle
+from . import ImageSide_ellipse as ImageSide_ellipse
+from . import ImageContourCount as ImageContourCount
+from rembg import remove
+from PIL import Image
 import sys
 import shutil
 import configparser
@@ -16,22 +18,23 @@ class PillMain():
     def __init__(self):
         pass
 
-    def grabcut_segmentation(self,image):
-        # 초기 마스크 생성
-        mask = np.zeros(image.shape[:2], np.uint8)
+    def remove_background(self, image_path):
+        input_image = Image.open(image_path)  # 이미지 로드
+        output_image = remove(input_image)  # 배경 제거
 
-        # 그랩컷 사각형 위치 조정
-        rect = (1500,900, 1100, 1100)  # 중앙에 위치한 알약을 대상으로 설정
+        # PIL 이미지를 OpenCV 형식으로 변환
+        open_cv_image = np.array(output_image)
+        # Convert RGB to BGR
+        open_cv_image = open_cv_image[:, :, ::-1].copy()
 
-        bgdModel = np.zeros((1, 65), np.float64)
-        fgdModel = np.zeros((1, 65), np.float64)
+        # 검정색 배경 생성
+        background = np.zeros_like(open_cv_image)
+        # 이미지 합성
+        mask = open_cv_image[:, :, 3]  # 알파 채널 사용하여 마스크 생성
+        for c in range(0, 3):
+            background[:, :, c] = open_cv_image[:, :, c] * (mask / 255.0) + background[:, :, c] * (1.0 - mask / 255.0)
 
-        cv2.grabCut(image, mask, rect, bgdModel, fgdModel, 5, cv2.GC_INIT_WITH_RECT)
-
-        mask2 = np.where((mask == 2) | (mask == 0), 0, 1).astype('uint8')
-        result = image * mask2[:, :, np.newaxis]
-
-        return result
+        return background
 
     def main(self, argv):
         if len(argv) != 4:
@@ -47,7 +50,7 @@ class PillMain():
         ori_shape = data_info['shape'][0]
         f_text = data_info['f_text'][0]
         b_text = data_info['b_text'][0]
-        drug_list_ori = data_info['drug_code'][0].replace('[','').replace(']','').replace(' ','').split(',')
+        drug_list_ori = data_info['drug_code'][0].replace('[', '').replace(']', '').replace(' ', '').split(',')
 
         print(f_text, b_text, drug_list_ori)
 
@@ -57,21 +60,17 @@ class PillMain():
             drug_list = drug_list_ori
 
         nowdate = datetime.datetime.now().strftime('%y%m%d_%H%M%S')
-        log_path = './data/pred_log/'+nowdate+'.log'
-        f=open(log_path,'a')
+        log_path = './data/pred_log/' + nowdate + '.log'
+        f = open(log_path, 'a')
 
         shape_list = ['circle', 'ellipse', 'triangle', 'diamond', 'pentagon', 'hexagon', 'octagon', 'square', 'etc']
         if ori_shape not in shape_list:
             print("SHAPE : circle, ellipse, triangle, diamond, pentagon, hexagon, octagon, square, and etc")
             sys.exit()
 
-        # 이미지 로드
-        image1 = cv2.imread(image1_path, cv2.IMREAD_UNCHANGED)
-        image2 = cv2.imread(image2_path, cv2.IMREAD_UNCHANGED)
-
-        # 이미지 배경을 검정색으로 변경
-        processed_image1 = self.grabcut_segmentation(image1)
-        processed_image2 = self.grabcut_segmentation(image2)
+        # 이미지 배경을 제거하고 검정색 배경에 넣기
+        processed_image1 = self.remove_background(image1_path)
+        processed_image2 = self.remove_background(image2_path)
 
         # 처리된 이미지를 임시 파일로 저장
         temp_image1_path = "./data/temp_processed_image1.jpeg"
@@ -101,17 +100,18 @@ class PillMain():
         if ori_shape in ('circle', 'ellipse'):
             # if input text count is two, shape is 'BOTH'
             if f_text != 'none' and b_text != 'none':
-                shape, image_path = choiceimage.ChoiceImage(ori_shape, image1_result, image2_result, contourcnt1, contourcnt2, temp_image1_path, temp_image2_path, True)
+                shape, image_path = choiceimage.ChoiceImage(ori_shape, image1_result, image2_result, contourcnt1,
+                                                            contourcnt2, temp_image1_path, temp_image2_path, True)
             else:
-                shape, image_path = choiceimage.ChoiceImage(ori_shape, image1_result, image2_result, contourcnt1, contourcnt2, temp_image1_path, temp_image2_path)
-
+                shape, image_path = choiceimage.ChoiceImage(ori_shape, image1_result, image2_result, contourcnt1,
+                                                            contourcnt2, temp_image1_path, temp_image2_path)
 
         else:
             image_path = choiceimage.ChoiceImageContour(contourcnt1, contourcnt2, temp_image1_path, temp_image2_path)
             shape = ori_shape
 
-        f.write(shape+'\n')
-        f.write(image_path+'\n')
+        # f.write(shape + '\n')
+        # f.write(image_path + '\n')
         print(image_path)
         # config file load for each shape
         config = configparser.ConfigParser()
@@ -139,13 +139,13 @@ class PillMain():
             config_file = shape_path + 'config_square.ini'
         elif shape == 'etc':
             config_file = shape_path + 'config_etc.ini'
-        
+
         config.read(config_file, encoding='UTF-8')
-        pillModel = PillModel.PillModel(config['pill_model_info']) 
-        
+        pillModel = PillModel.PillModel(config['pill_model_info'])
+
         # image processing
         pillModel.pill_image_process(image_path)
-        
+
         # image open
         img = pillModel.testImage(config['pill_model_info']['make_folder_path'])
 
@@ -158,19 +158,19 @@ class PillMain():
         indices_top, includ_count = pillModel.pill_sorting(output, drug_list)
 
         # if shape_oneside( or shape_both) model training drug code is not in drug list, try shape_both (or shape_oneside) model
-        if (includ_count == 0) and (ori_shape in ('circle','ellipse')):
-            if shape == ori_shape+'_ONESIDE':
-                shape = ori_shape+'_BOTH'
+        if (includ_count == 0) and (ori_shape in ('circle', 'ellipse')):
+            if shape == ori_shape + '_ONESIDE':
+                shape = ori_shape + '_BOTH'
                 config_file = shape_path + 'config_' + shape + '.ini'
 
             else:
-                shape = ori_shape+'_ONESIDE'
-                config_file = shape_path + 'config_' + shape+'.ini'
+                shape = ori_shape + '_ONESIDE'
+                config_file = shape_path + 'config_' + shape + '.ini'
 
-            f.write(shape+'\n')
+            # f.write(shape + '\n')
 
             config.read(config_file, encoding='UTF-8')
-            pillModel = PillModel.PillModel(config['pill_model_info']) 
+            pillModel = PillModel.PillModel(config['pill_model_info'])
             pillModel.pill_shape_conf(shape)
             pillModel.pill_model_loading(config['pill_model_info'])
 

@@ -25,9 +25,9 @@ class ImageProcess():
 
     def CropShape(self, input_image):
         # 처리된 이미지를 임시 파일로 저장
-        temp_image1_path = "./data/crop1.png"
-        temp_image2_path = "./data/crop2.png"
-        temp_image3_path = "./data/crop3.png"
+        temp_image1_path = "../data/crop1.png"
+        temp_image2_path = "../data/crop2.png"
+        temp_image3_path = "../data/crop3.png"
 
         left_x, right_x, left_y, right_y = self.ImageArea(input_image)
         crop_img = cv2.imread(input_image, cv2.IMREAD_UNCHANGED)

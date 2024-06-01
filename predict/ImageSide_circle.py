@@ -9,7 +9,7 @@ class ImageContour():
 
 
     def ImageCanny(self, _inputImage, _option = 1):
-        temp_image1_path = "./data/resize.png"
+        temp_image1_path = "../data/resize.png"
         inputImage = self.m_cImageProcess.CropShape(_inputImage)
         inputImage = cv2.resize(inputImage, (200, 200), interpolation=cv2.INTER_LINEAR)
         cv2.imwrite(temp_image1_path, inputImage)
